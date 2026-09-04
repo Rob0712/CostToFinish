@@ -1,0 +1,6 @@
+{
+  "name": "CostToFinish.com",
+  "description": "Real Estate & Home completion engine: Shell-to-Slab Estimator, DIY Regret Calculator, and Basement/Attic Completion with code-compliant trade takeoffs and equity ROI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
