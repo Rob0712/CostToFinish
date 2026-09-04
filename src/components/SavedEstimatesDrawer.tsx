@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, Trash2, Calendar, ArrowRight, Bookmark, Sparkles } from 'lucide-react';
+import { X, Trash2, Calendar, ArrowRight, Bookmark, Cloud, CloudOff, LogIn } from 'lucide-react';
 import { SavedProjectEstimate } from '../types';
 import { formatCurrency } from '../utils/calculationUtils';
+import { useAuth } from '../context/AuthContext';
 
 interface Props {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface Props {
   savedEstimates: SavedProjectEstimate[];
   onDeleteEstimate: (id: string) => void;
   onLoadEstimate: (estimate: SavedProjectEstimate) => void;
+  onOpenAuthModal: () => void;
 }
 
 export const SavedEstimatesDrawer: React.FC<Props> = ({
@@ -17,12 +19,15 @@ export const SavedEstimatesDrawer: React.FC<Props> = ({
   savedEstimates,
   onDeleteEstimate,
   onLoadEstimate,
+  onOpenAuthModal,
 }) => {
+  const { currentUser, userProfile } = useAuth();
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/70 backdrop-blur-xs flex justify-end">
-      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between border-l-2 border-slate-200">
+      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between border-l-2 border-slate-200 animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -38,6 +43,30 @@ export const SavedEstimatesDrawer: React.FC<Props> = ({
           >
             <X className="w-5 h-5 stroke-[2.5]" />
           </button>
+        </div>
+
+        {/* Cloud Sync Status Banner */}
+        <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
+          {currentUser ? (
+            <div className="flex items-center gap-2 text-emerald-700 font-bold">
+              <Cloud className="w-4 h-4 text-emerald-600" />
+              <span>Synced with Cloud ({currentUser.email})</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-1.5 text-slate-600 font-semibold">
+                <CloudOff className="w-4 h-4 text-slate-400" />
+                <span>Storing locally</span>
+              </div>
+              <button
+                onClick={onOpenAuthModal}
+                className="text-blue-600 hover:text-blue-800 font-black inline-flex items-center gap-1"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign in to sync</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Content List */}
@@ -94,7 +123,9 @@ export const SavedEstimatesDrawer: React.FC<Props> = ({
 
                 <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
                   <span className="text-slate-600 font-bold">
-                    {item.result.effectiveSqFt} sq. ft. • {item.result.remainingPercentage}% left
+                    {item.result.inputUnit === 'sqm'
+                      ? `${item.result.rawInputArea.toLocaleString()} m² (${item.result.effectiveSqFt.toLocaleString()} sq. ft.)`
+                      : `${item.result.effectiveSqFt.toLocaleString()} sq. ft.`} • {item.result.remainingPercentage}% left
                   </span>
                   <button
                     onClick={() => {
@@ -114,7 +145,9 @@ export const SavedEstimatesDrawer: React.FC<Props> = ({
 
         {/* Footer info */}
         <div className="p-4 border-t border-slate-200 bg-slate-50 text-xs font-bold text-slate-500 text-center">
-          Saved locally in your browser's private storage.
+          {currentUser
+            ? `Protected in your Firestore account (${currentUser.email})`
+            : 'Saved locally in your browser. Sign in to access from any computer or phone.'}
         </div>
       </div>
     </div>

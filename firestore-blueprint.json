@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information with role-based access",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["homeowner", "investor", "contractor", "supplier", "admin"] },
+        "phone": { "type": "string" },
+        "companyName": { "type": "string" },
+        "contractorProfileId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "role", "createdAt"]
+    },
+    "SavedProject": {
+      "title": "SavedProject",
+      "description": "User-saved cost-to-finish project estimate",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "engineType": { "type": "string", "enum": ["shell-to-slab", "basement-attic", "diy-regret", "other"] },
+        "date": { "type": "string" },
+        "totalCost": { "type": "number" },
+        "diyCost": { "type": "number" },
+        "sqft": { "type": "number" },
+        "progressPercent": { "type": "number" },
+        "location": { "type": "string" },
+        "qualityTier": { "type": "string" },
+        "details": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "category", "totalCost", "createdAt"]
+    },
+    "Contractor": {
+      "title": "Contractor",
+      "description": "Licensed contractor business profile directory with credentials and reviews",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "companyName": { "type": "string" },
+        "contactName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "website": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "zipCode": { "type": "string" },
+        "serviceRadiusMiles": { "type": "number" },
+        "specialties": { "type": "array", "items": { "type": "string" } },
+        "licenseNumber": { "type": "string" },
+        "licenseState": { "type": "string" },
+        "insuranceVerified": { "type": "boolean" },
+        "bondAmount": { "type": "number" },
+        "yearsInBusiness": { "type": "number" },
+        "hourlyRate": { "type": "number" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "completedProjectsCount": { "type": "number" },
+        "rescueSpecialist": { "type": "boolean" },
+        "bio": { "type": "string" },
+        "featuredBadge": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "companyName", "email", "specialties", "licenseNumber", "verified"]
+    },
+    "MaterialItem": {
+      "title": "MaterialItem",
+      "description": "Building material specification and pricing takeoff catalog item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["drywall", "mep", "flooring", "framing", "kitchen_bath", "paint", "doors_trim", "exterior"] },
+        "subcategory": { "type": "string" },
+        "unit": { "type": "string" },
+        "unitPrice": { "type": "number" },
+        "contractorPrice": { "type": "number" },
+        "bulkThreshold": { "type": "number" },
+        "leadTimeDays": { "type": "number" },
+        "brand": { "type": "string" },
+        "sku": { "type": "string" },
+        "coveragePerUnit": { "type": "string" },
+        "inStock": { "type": "boolean" },
+        "wasteFactorPercent": { "type": "number" },
+        "specs": { "type": "string" },
+        "supplier": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "unit", "unitPrice"]
+    },
+    "ContractorInquiry": {
+      "title": "ContractorInquiry",
+      "description": "Contractor bid requests or project scope report requests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "contractorId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "zipCode": { "type": "string" },
+        "projectType": { "type": "string" },
+        "estimatedCost": { "type": "number" },
+        "timeframe": { "type": "string" },
+        "mode": { "type": "string", "enum": ["bids", "report", "direct_hire"] },
+        "status": { "type": "string", "enum": ["pending", "contacted", "matched", "completed"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email", "createdAt", "mode"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles with role assignment"
+    },
+    "/users/{userId}/estimates/{estimateId}": {
+      "schema": "SavedProject",
+      "description": "User private saved estimates"
+    },
+    "/contractors/{contractorId}": {
+      "schema": "Contractor",
+      "description": "Public contractor directory with verified credentials and ratings"
+    },
+    "/materials/{materialId}": {
+      "schema": "MaterialItem",
+      "description": "Materials pricing database with contractor vs retail pricing"
+    },
+    "/contractor_inquiries/{inquiryId}": {
+      "schema": "ContractorInquiry",
+      "description": "Contractor bid, direct inquiry, and scope report requests"
+    }
+  }
+}

@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'rob.anub@gmail.com' ||
+        request.auth.token.email.matches('.*@admin\\.costtofinish\\.com') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    // User profiles: owner can read and write their own profile; admins can read all
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) || isAdmin();
+      
+      // User's private saved estimates
+      match /estimates/{estimateId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Contractors directory: public read access for all visitors, write by authenticated contractor profile owner or admin
+    match /contractors/{contractorId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        request.auth.uid == contractorId ||
+        isAdmin()
+      );
+    }
+
+    // Building materials pricing catalog: public read access for calculations & estimators
+    match /materials/{materialId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Contractor inquiries / direct bids / reports / marketplace orders:
+    match /contractor_inquiries/{inquiryId} {
+      allow create: if true;
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.contractorId == request.auth.uid ||
+        resource.data.email == request.auth.token.email ||
+        isAdmin()
+      );
+      allow update, delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.contractorId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+  }
+}

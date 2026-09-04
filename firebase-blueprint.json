@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered user profile in CostToFinish.com",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["homeowner", "investor", "contractor", "supplier", "admin"] },
+        "companyName": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "email", "role"]
+    },
+    "Estimate": {
+      "title": "Estimate",
+      "description": "User saved renovation completion estimate",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "result": { "type": "object" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "result"]
+    },
+    "Contractor": {
+      "title": "Contractor",
+      "description": "Verified contractor profile and credentials",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "companyName": { "type": "string" },
+        "contactName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "specialties": { "type": "array" },
+        "rating": { "type": "number" },
+        "rescueSpecialist": { "type": "boolean" },
+        "verified": { "type": "boolean" }
+      },
+      "required": ["id", "companyName", "email", "state"]
+    },
+    "ContractorInquiry": {
+      "title": "ContractorInquiry",
+      "description": "Bid request or inspection report request from client",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "contractorId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "projectAddress": { "type": "string" },
+        "scopeDescription": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "fullName", "email"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User accounts and authentication profiles"
+    },
+    "/users/{userId}/estimates/{estimateId}": {
+      "schema": "Estimate",
+      "description": "Private project estimates and scope calculations"
+    },
+    "/contractors/{contractorId}": {
+      "schema": "Contractor",
+      "description": "Public verified trade contractor profiles"
+    },
+    "/contractor_inquiries/{inquiryId}": {
+      "schema": "ContractorInquiry",
+      "description": "Lead submissions and contractor quotation requests"
+    }
+  }
+}

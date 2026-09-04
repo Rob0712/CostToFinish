@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   FileText,
@@ -10,31 +10,74 @@ import {
   MapPin,
   Phone,
   User,
-  Printer
+  Printer,
+  Cloud,
+  Hammer,
+  Compass
 } from 'lucide-react';
-import { HomeRenoResult } from '../types';
+import { HomeRenoResult, ContractorProfile } from '../types';
 import { formatCurrency } from '../utils/calculationUtils';
+import { saveContractorInquiryToCloud } from '../lib/estimatesDb';
+import { useAuth } from '../context/AuthContext';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  mode: 'bids' | 'report';
+  mode: 'bids' | 'report' | 'direct_hire';
   result?: HomeRenoResult;
+  selectedContractor?: ContractorProfile;
 }
 
-export const LeadCaptureModal: React.FC<Props> = ({ isOpen, onClose, mode, result }) => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+export const LeadCaptureModal: React.FC<Props> = ({
+  isOpen,
+  onClose,
+  mode,
+  result,
+  selectedContractor,
+}) => {
+  const { currentUser } = useAuth();
+  const [name, setName] = useState(currentUser?.displayName || '');
+  const [email, setEmail] = useState(currentUser?.email || '');
   const [phone, setPhone] = useState('');
-  const [zipCode, setZipCode] = useState('');
+  const [zipCode, setZipCode] = useState(selectedContractor?.zipCode || '');
   const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      if (!name) setName(currentUser.displayName || '');
+      if (!email) setEmail(currentUser.email || '');
+    }
+  }, [currentUser]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setSubmitting(true);
+    try {
+      await saveContractorInquiryToCloud({
+        userId: currentUser?.uid,
+        contractorId: selectedContractor?.id,
+        fullName: name,
+        email,
+        phone,
+        zipCode,
+        projectType: selectedContractor
+          ? `Direct Bid: ${selectedContractor.companyName}`
+          : 'Home Reno / Shell to Slab Finish',
+        estimatedCost: result?.costToFinishContractor || (selectedContractor ? selectedContractor.hourlyRate * 40 : 0),
+        timeframe: 'Immediate',
+        mode,
+        notes,
+      });
+    } catch (err) {
+      console.warn('Could not record lead to cloud:', err);
+    } finally {
+      setSubmitting(false);
+      setSubmitted(true);
+    }
   };
 
   const handlePrint = () => {
@@ -55,7 +98,12 @@ export const LeadCaptureModal: React.FC<Props> = ({ isOpen, onClose, mode, resul
         {!submitted ? (
           <div>
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-blue-600 mb-1.5">
-              {mode === 'bids' ? (
+              {selectedContractor ? (
+                <>
+                  <Hammer className="w-4 h-4 text-emerald-600 stroke-[2.5]" />
+                  <span>Direct Contractor Bid Request</span>
+                </>
+              ) : mode === 'bids' ? (
                 <>
                   <UserCheck className="w-4 h-4 text-emerald-600 stroke-[2.5]" />
                   <span>Licensed Contractor Network</span>
@@ -69,13 +117,17 @@ export const LeadCaptureModal: React.FC<Props> = ({ isOpen, onClose, mode, resul
             </div>
 
             <h3 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
-              {mode === 'bids'
+              {selectedContractor
+                ? `Request Bid from ${selectedContractor.companyName}`
+                : mode === 'bids'
                 ? 'Get 3 Competitive Bids from Local Finishers'
                 : 'Download Your Certified Valuation PDF Report'}
             </h3>
 
             <p className="text-xs sm:text-sm text-slate-600 font-medium mt-2 leading-relaxed">
-              {mode === 'bids'
+              {selectedContractor
+                ? `Connect directly with ${selectedContractor.contactName} (${selectedContractor.city}, ${selectedContractor.state}). Verified license ${selectedContractor.licenseNumber}.`
+                : mode === 'bids'
                 ? 'Connect directly with licensed, insured general contractors in your zip code who specialize in stalled or unfinished shell completion.'
                 : 'Taking this to a loan officer for a renovation mortgage or HELOC? Download the itemized line-item report formatted for bank underwriters.'}
             </p>
@@ -90,7 +142,12 @@ export const LeadCaptureModal: React.FC<Props> = ({ isOpen, onClose, mode, resul
                 </div>
                 <div className="text-right">
                   <span className="text-slate-500 font-bold uppercase tracking-wider text-[11px] block">Scope Dimensions:</span>
-                  <span className="font-black text-slate-900">{result.effectiveSqFt} sq. ft. ({result.remainingPercentage}% left)</span>
+                  <span className="font-black text-slate-900">
+                    {result.inputUnit === 'sqm'
+                      ? `${result.rawInputArea.toLocaleString()} m² (${result.effectiveSqFt.toLocaleString()} sq. ft.)`
+                      : `${result.effectiveSqFt.toLocaleString()} sq. ft. (${result.effectiveSqM.toLocaleString()} m²)`}
+                    {' '}({result.remainingPercentage}% left)
+                  </span>
                 </div>
               </div>
             )}
@@ -144,7 +201,7 @@ export const LeadCaptureModal: React.FC<Props> = ({ isOpen, onClose, mode, resul
                       type="text"
                       value={zipCode}
                       onChange={(e) => setZipCode(e.target.value)}
-                      placeholder="e.g. 78701 or M5V 2T6"
+                      placeholder="e.g. 78701 or 98101"
                       className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-950 focus:bg-white focus:outline-blue-600"
                     />
                   </div>
@@ -152,7 +209,7 @@ export const LeadCaptureModal: React.FC<Props> = ({ isOpen, onClose, mode, resul
 
                 <div>
                   <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-1.5">
-                    Phone (Optional for SMS Quote)
+                    Phone (for quote response)
                   </label>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
@@ -182,14 +239,28 @@ export const LeadCaptureModal: React.FC<Props> = ({ isOpen, onClose, mode, resul
 
               <button
                 type="submit"
-                className="w-full py-3.5 px-5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-black text-sm tracking-tight rounded-xl shadow-md transition"
+                disabled={submitting}
+                className="w-full py-3.5 px-5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-black text-sm tracking-tight rounded-xl shadow-md transition disabled:opacity-60 flex items-center justify-center gap-2"
               >
-                {mode === 'bids' ? 'Request 3 Contractor Bids Now' : 'Generate & Download PDF Report'}
+                {submitting ? (
+                  <span>Transmitting to Cloud...</span>
+                ) : (
+                  <>
+                    <Cloud className="w-4 h-4" />
+                    <span>
+                      {selectedContractor
+                        ? `Submit Bid Request to ${selectedContractor.companyName}`
+                        : mode === 'bids'
+                        ? 'Request 3 Contractor Bids Now'
+                        : 'Generate & Download PDF Report'}
+                    </span>
+                  </>
+                )}
               </button>
 
               <div className="flex items-center justify-center gap-2 text-xs text-slate-500 text-center pt-1 font-medium">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 stroke-[2.5]" />
-                <span>Zero spam guarantee. Your details are solely used for this specific estimate.</span>
+                <span>Zero spam guarantee. Saved securely in Firestore.</span>
               </div>
             </form>
           </div>
@@ -201,29 +272,50 @@ export const LeadCaptureModal: React.FC<Props> = ({ isOpen, onClose, mode, resul
             </div>
 
             <h3 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
-              {mode === 'bids' ? 'Bid Requests Dispatched!' : 'Report Ready for Export!'}
+              {selectedContractor
+                ? 'Bid Request Sent Directly to Contractor!'
+                : mode === 'bids'
+                ? 'Bid Requests Dispatched!'
+                : 'Report Ready for Export!'}
             </h3>
 
             <p className="text-xs sm:text-sm text-slate-600 font-medium max-w-sm mx-auto leading-relaxed">
-              {mode === 'bids'
-                ? `Thank you, ${name || 'friend'}. We have matched your ${zipCode} project profile with 3 pre-vetted local finish contractors. You will receive an intro email at ${email}.`
-                : `Your official CostToFinish.com Certified Valuation Report for ${name || 'your project'} has been synthesized.`}
+              {selectedContractor
+                ? `Thank you, ${name || 'friend'}. Your project inquiry has been dispatched to ${selectedContractor.companyName} (${selectedContractor.contactName}). You will receive an initial review at ${email}.`
+                : mode === 'bids'
+                ? `Thank you, ${name || 'friend'}. We have saved your project inquiry to Firestore and matched your ${zipCode} project profile with 3 pre-vetted local finish contractors. You will receive an intro email at ${email}.`
+                : `Your official CostToFinish.com Certified Valuation Report for ${name || 'your project'} has been synthesized and logged to your account.`}
             </p>
 
             <div className="p-5 bg-slate-50 border-2 border-slate-200 rounded-2xl max-w-sm mx-auto text-left text-xs space-y-2">
               <div className="font-black text-slate-950 text-sm">Summary Snapshot:</div>
               <div className="flex justify-between text-slate-600 font-medium">
-                <span>Total Cost to Finish:</span>
+                <span>Target Finishing Cost:</span>
                 <span className="font-black text-slate-950">{result ? formatCurrency(result.costToFinishContractor) : '$45,000'}</span>
               </div>
-              <div className="flex justify-between text-slate-600 font-medium">
-                <span>DIY Potential Savings:</span>
-                <span className="font-black text-emerald-600">{result ? formatCurrency(result.diySavings) : '$13,500'}</span>
-              </div>
+              {selectedContractor && (
+                <div className="flex justify-between text-slate-600 font-medium">
+                  <span>Selected Contractor:</span>
+                  <span className="font-black text-blue-700">{selectedContractor.companyName}</span>
+                </div>
+              )}
               <div className="flex justify-between text-slate-600 font-medium">
                 <span>Working Days Timeline:</span>
                 <span className="font-black text-slate-950">~{result?.estimatedDaysToFinish || 75} Days</span>
               </div>
+              {result?.blueprintSummary && (
+                <div className="pt-2 mt-2 border-t border-slate-200">
+                  <div className="font-bold text-blue-900 flex items-center gap-1 mb-1">
+                    <Compass className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Architectural Plan Specification:</span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 space-y-0.5">
+                    <div>• Total Bathrooms: {result.blueprintSummary.totalBaths} Suites</div>
+                    <div>• Cabinet Run: {result.blueprintSummary.cabinetLinearFeetTotal} Linear Ft ({result.blueprintSummary.countertopSqFtEstimate} sq.ft. Slab)</div>
+                    <div>• Wall/Ceiling Height: {result.blueprintSummary.ceilingHeightNote}</div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-center gap-3 pt-4">

@@ -1,19 +1,20 @@
 import React from 'react';
-import { CheckCircle2, ShieldCheck, ArrowUpRight, Github, Twitter } from 'lucide-react';
-import { CategoryId } from '../types';
+import { CheckCircle2, ShieldCheck, ArrowUpRight, Hammer, Package, Store, Home, FileText } from 'lucide-react';
+import { AppViewMode } from './Header';
+import { RealEstateToolId } from './RealEstateHomeSuite';
 
 interface Props {
-  onSelectView: (view: 'home-reno' | 'all-calculators' | 'seo-articles' | 'other-calc') => void;
-  onSelectCategory: (id: CategoryId) => void;
+  onSelectView: (view: AppViewMode) => void;
+  onSelectTool: (tool: RealEstateToolId) => void;
 }
 
-export const Footer: React.FC<Props> = ({ onSelectView, onSelectCategory }) => {
+export const Footer: React.FC<Props> = ({ onSelectView, onSelectTool }) => {
   return (
     <footer className="bg-slate-950 text-white border-t-2 border-slate-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Brand Column */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-1 space-y-4">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black shadow-sm">
                 <span>C</span>
@@ -24,109 +25,126 @@ export const Footer: React.FC<Props> = ({ onSelectView, onSelectCategory }) => {
               </span>
             </div>
 
-            <p className="text-xs sm:text-sm text-slate-400 font-medium leading-relaxed max-w-sm">
-              The project completion estimation platform. We calculate the exact "final mile" costs to take stalled construction, unfinished degrees, or passion projects across the finish line.
+            <p className="text-xs sm:text-sm text-slate-400 font-medium leading-relaxed">
+              The premier real estate completion estimation platform. We calculate the exact "final mile" costs, contractor bids, and equity margins to take stalled construction and unfinished homes across the finish line.
             </p>
 
-            <div className="pt-2 text-xs text-slate-400 font-bold uppercase tracking-wider">
-              Built for solo homeowners, DIY builders, investors & completers.
+            <div className="pt-2 flex flex-wrap gap-2 text-xs">
+              <button
+                onClick={() => onSelectView('contractors')}
+                className="px-3 py-1.5 rounded-lg bg-emerald-950/80 text-emerald-400 border border-emerald-800 font-bold hover:bg-emerald-900 transition flex items-center gap-1.5"
+              >
+                <Hammer className="w-3.5 h-3.5" />
+                <span>Contractors</span>
+              </button>
+              <button
+                onClick={() => onSelectView('materials')}
+                className="px-3 py-1.5 rounded-lg bg-blue-950/80 text-blue-400 border border-blue-800 font-bold hover:bg-blue-900 transition flex items-center gap-1.5"
+              >
+                <Store className="w-3.5 h-3.5" />
+                <span>Marketplace</span>
+              </button>
             </div>
           </div>
 
-          {/* Real Estate & Home */}
+          {/* Construction & Finishing Engines */}
           <div>
             <h4 className="text-xs font-black uppercase tracking-wider text-white mb-4">
-              Home & Construction
+              Finishing Engines
             </h4>
             <ul className="space-y-2.5 text-xs text-slate-400 font-semibold">
               <li>
                 <button
-                  onClick={() => onSelectView('home-reno')}
-                  className="hover:text-white transition text-left"
+                  onClick={() => {
+                    onSelectView('home-reno');
+                    onSelectTool('shell-to-slab');
+                  }}
+                  className="hover:text-white transition text-left flex items-center gap-1.5"
                 >
-                  Shell-to-Habitable Home
+                  <Home className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Shell-to-Slab Estimator</span>
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onSelectView('home-reno')}
+                  onClick={() => {
+                    onSelectView('home-reno');
+                    onSelectTool('basement-attic');
+                  }}
                   className="hover:text-white transition text-left"
                 >
-                  Basement Finish Estimator
+                  Basement & Attic Completion
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onSelectCategory('diy-regret')}
+                  onClick={() => {
+                    onSelectView('home-reno');
+                    onSelectTool('diy-regret');
+                  }}
                   className="hover:text-white transition text-left"
                 >
-                  DIY Regret Index Meter
+                  DIY Regret & Rescue Meter
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onSelectView('home-reno')}
-                  className="hover:text-white transition text-left"
+                  onClick={() => onSelectView('materials')}
+                  className="hover:text-white transition text-left text-blue-400"
                 >
-                  Foreclosure Rehab Takeoff
+                  Tools, Equipment & Materials Marketplace
                 </button>
               </li>
             </ul>
           </div>
 
-          {/* Life & Education */}
+          {/* Trade Network & Pro Services */}
           <div>
             <h4 className="text-xs font-black uppercase tracking-wider text-white mb-4">
-              Life & Education
+              Trades & Financing
             </h4>
             <ul className="space-y-2.5 text-xs text-slate-400 font-semibold">
               <li>
                 <button
-                  onClick={() => onSelectCategory('degree-completion')}
-                  className="hover:text-white transition text-left"
+                  onClick={() => onSelectView('contractors')}
+                  className="hover:text-white transition text-left text-emerald-400"
                 >
-                  Degree Final Mile Tuition
+                  Verified Finish Contractors
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onSelectCategory('debt-freedom')}
+                  onClick={() => onSelectView('contractors')}
                   className="hover:text-white transition text-left"
                 >
-                  Debt Payoff Freedom Date
+                  Join Contractor Network
                 </button>
               </li>
               <li>
-                <button
-                  onClick={() => onSelectCategory('wedding-last-mile')}
-                  className="hover:text-white transition text-left"
-                >
-                  Wedding Last-Mile Run Rate
-                </button>
+                <span className="text-slate-500 cursor-not-allowed">
+                  Fannie Mae HomeStyle Ready Takeoffs
+                </span>
               </li>
               <li>
-                <button
-                  onClick={() => onSelectCategory('dental-planner')}
-                  className="hover:text-white transition text-left"
-                >
-                  Dental & Medical Phasing
-                </button>
+                <span className="text-slate-500 cursor-not-allowed">
+                  FHA 203(k) Line-Item Formatter
+                </span>
               </li>
             </ul>
           </div>
 
-          {/* Passion Projects & Guides */}
+          {/* Construction & Appraisal Guides */}
           <div>
             <h4 className="text-xs font-black uppercase tracking-wider text-white mb-4">
-              Passion & Authority
+              Field Guides & Reports
             </h4>
             <ul className="space-y-2.5 text-xs text-slate-400 font-semibold">
               <li>
                 <button
-                  onClick={() => onSelectCategory('car-restoration')}
+                  onClick={() => onSelectView('seo-articles')}
                   className="hover:text-white transition text-left"
                 >
-                  Classic Car Restoration
+                  Bought an Unfinished Shell Guide
                 </button>
               </li>
               <li>
@@ -134,7 +152,7 @@ export const Footer: React.FC<Props> = ({ onSelectView, onSelectCategory }) => {
                   onClick={() => onSelectView('seo-articles')}
                   className="hover:text-white transition text-left"
                 >
-                  Bought a Shell Guide
+                  Barndominium Dry-In Finish Costs
                 </button>
               </li>
               <li>
@@ -142,7 +160,7 @@ export const Footer: React.FC<Props> = ({ onSelectView, onSelectCategory }) => {
                   onClick={() => onSelectView('seo-articles')}
                   className="hover:text-white transition text-left"
                 >
-                  Basement Sq. Ft. ROI
+                  Basement Egress Window ROI
                 </button>
               </li>
               <li>
@@ -150,20 +168,28 @@ export const Footer: React.FC<Props> = ({ onSelectView, onSelectCategory }) => {
                   onClick={() => onSelectView('seo-articles')}
                   className="hover:text-white transition text-left"
                 >
-                  DIY vs. Contractor Matrix
+                  Owner-Builder Permit Checklist
                 </button>
               </li>
             </ul>
           </div>
         </div>
 
-        {/* Disclaimer & Copyright */}
-        <div className="mt-12 pt-8 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400 font-medium">
-          <p className="max-w-3xl leading-relaxed">
-            <strong className="text-slate-300 font-bold">Disclaimer:</strong> CostToFinish.com provides heuristic and weighted algorithmic estimates based on regional labor indices, material baseline averages, and trade multipliers. Actual contractor bids, municipal permit requirements, and structural conditions will vary. Always obtain licensed professional on-site engineering assessments prior to entering binding contracts.
-          </p>
-          <div className="shrink-0 text-slate-300 font-bold">
-            © {new Date().getFullYear()} CostToFinish.com. All rights reserved.
+        {/* Bottom copyright */}
+        <div className="pt-10 mt-10 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
+          <p>© {new Date().getFullYear()} CostToFinish.com. Dedicated to Real Estate & Home Construction Completion.</p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => onSelectView('admin')}
+              className="text-emerald-400 hover:text-emerald-300 font-bold transition flex items-center gap-1"
+            >
+              <span>Admin & Revenue Hub</span>
+              <ArrowUpRight className="w-3 h-3" />
+            </button>
+            <span>•</span>
+            <span className="text-slate-400">Powered by Cloud Firestore</span>
+            <span>•</span>
+            <span className="text-slate-400">Verified Contractor Bids</span>
           </div>
         </div>
       </div>

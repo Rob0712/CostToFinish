@@ -1,19 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
+import { Header, AppViewMode } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { RealEstateHomeSuite, RealEstateToolId } from './components/RealEstateHomeSuite';
-import { CategoryGrid } from './components/CategoryGrid';
-import { OtherCalculators } from './components/OtherCalculators';
 import { SeoArticlesView } from './components/SeoArticlesView';
+import { ContractorDirectoryView } from './components/ContractorDirectoryView';
+import { ConstructionMarketplaceView } from './components/ConstructionMarketplaceView';
+import { AdminMonetizationDashboard } from './components/AdminMonetizationDashboard';
 import { LeadCaptureModal } from './components/LeadCaptureModal';
 import { SavedEstimatesDrawer } from './components/SavedEstimatesDrawer';
+import { AuthModal } from './components/AuthModal';
 import { Footer } from './components/Footer';
-import { CategoryId, HomeRenoResult, SavedProjectEstimate } from './types';
+import { CategoryId, HomeRenoResult, SavedProjectEstimate, ContractorProfile } from './types';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { saveEstimateToCloud, fetchUserEstimates, deleteEstimateFromCloud } from './lib/estimatesDb';
 
-export default function App() {
-  const [activeView, setActiveView] = useState<'home-reno' | 'all-calculators' | 'seo-articles' | 'other-calc'>('home-reno');
+function MainApp() {
+  const { currentUser } = useAuth();
+  const [activeView, setActiveView] = useState<AppViewMode>('home-reno');
   const [realEstateTool, setRealEstateTool] = useState<RealEstateToolId>('shell-to-slab');
-  const [activeSubCalcId, setActiveSubCalcId] = useState<CategoryId>('degree-completion');
   const [savedEstimates, setSavedEstimates] = useState<SavedProjectEstimate[]>(() => {
     try {
       const stored = localStorage.getItem('costtofinish_saved_estimates');
@@ -23,16 +27,19 @@ export default function App() {
     }
   });
   const [isSavedDrawerOpen, setIsSavedDrawerOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalInitialRole, setAuthModalInitialRole] = useState<'homeowner' | 'contractor'>('homeowner');
   const [leadModal, setLeadModal] = useState<{
     isOpen: boolean;
-    mode: 'bids' | 'report';
+    mode: 'bids' | 'report' | 'direct_hire';
     result?: HomeRenoResult;
+    selectedContractor?: ContractorProfile;
   }>({
     isOpen: false,
     mode: 'bids',
   });
 
-  // Sync to localStorage
+  // Sync to localStorage as client cache
   useEffect(() => {
     try {
       localStorage.setItem('costtofinish_saved_estimates', JSON.stringify(savedEstimates));
@@ -41,7 +48,52 @@ export default function App() {
     }
   }, [savedEstimates]);
 
-  const handleSaveEstimate = (result: HomeRenoResult, title: string) => {
+  // When user logs in, pull their cloud estimates from Firestore
+  useEffect(() => {
+    if (!currentUser) return;
+    async function loadCloudEstimates() {
+      try {
+        const cloudRecords = await fetchUserEstimates(currentUser!.uid);
+        if (cloudRecords && cloudRecords.length > 0) {
+          const mapped: SavedProjectEstimate[] = cloudRecords.map((r) => ({
+            id: r.id,
+            title: r.title,
+            category: (r.category as CategoryId) || 'home-reno',
+            date: r.date,
+            result: r.details || {
+              costToFinishContractor: r.totalCost,
+              costToFinishDIY: r.diyCost || 0,
+              effectiveSqFt: r.sqft || 0,
+              remainingPercentage: 100 - (r.progressPercent || 0),
+              completedPercentage: r.progressPercent || 0,
+              totalScopeCost: r.totalCost,
+            },
+          }));
+
+          // Merge local and cloud estimates by ID
+          setSavedEstimates((localList) => {
+            const combined = [...mapped];
+            for (const item of localList) {
+              if (!combined.some((c) => c.id === item.id)) {
+                combined.push(item);
+                saveEstimateToCloud(currentUser!.uid, item);
+              }
+            }
+            return combined;
+          });
+        } else if (savedEstimates.length > 0) {
+          for (const item of savedEstimates) {
+            saveEstimateToCloud(currentUser.uid, item);
+          }
+        }
+      } catch (err) {
+        console.warn('Error loading cloud estimates:', err);
+      }
+    }
+    loadCloudEstimates();
+  }, [currentUser]);
+
+  const handleSaveEstimate = async (result: HomeRenoResult, title: string) => {
     const newEstimate: SavedProjectEstimate = {
       id: 'est_' + Date.now(),
       title: title || `Home Finish (${result.effectiveSqFt} sq ft)`,
@@ -50,36 +102,51 @@ export default function App() {
       result,
     };
     setSavedEstimates((prev) => [newEstimate, ...prev]);
+
+    if (currentUser) {
+      try {
+        await saveEstimateToCloud(currentUser.uid, newEstimate, {
+          engineType: realEstateTool,
+          sqft: result.effectiveSqFt,
+        });
+      } catch (err) {
+        console.warn('Could not save estimate to cloud:', err);
+      }
+    }
   };
 
-  const handleDeleteEstimate = (id: string) => {
+  const handleDeleteEstimate = async (id: string) => {
     setSavedEstimates((prev) => prev.filter((item) => item.id !== id));
+    if (currentUser) {
+      try {
+        await deleteEstimateFromCloud(currentUser.uid, id);
+      } catch (err) {
+        console.warn('Could not delete estimate from cloud:', err);
+      }
+    }
   };
 
   const handleLoadEstimate = (estimate: SavedProjectEstimate) => {
     setActiveView('home-reno');
-    // Scroll to top
-    window.scrollTo({ top: 300, behavior: 'smooth' });
+    window.scrollTo({ top: 380, behavior: 'smooth' });
   };
 
-  const handleCategorySelect = (id: CategoryId) => {
-    if (id === 'home-reno') {
-      setRealEstateTool('shell-to-slab');
-      setActiveView('home-reno');
-      window.scrollTo({ top: 400, behavior: 'smooth' });
-    } else if (id === 'basement-attic') {
+  const handleSelectRealEstateTool = (tool: RealEstateToolId) => {
+    setRealEstateTool(tool);
+    setActiveView('home-reno');
+    window.scrollTo({ top: 400, behavior: 'smooth' });
+  };
+
+  const handleArticleCalculatorRequest = (id: CategoryId) => {
+    if (id === 'basement-attic') {
       setRealEstateTool('basement-attic');
-      setActiveView('home-reno');
-      window.scrollTo({ top: 400, behavior: 'smooth' });
     } else if (id === 'diy-regret') {
       setRealEstateTool('diy-regret');
-      setActiveView('home-reno');
-      window.scrollTo({ top: 400, behavior: 'smooth' });
     } else {
-      setActiveSubCalcId(id);
-      setActiveView('other-calc');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setRealEstateTool('shell-to-slab');
     }
+    setActiveView('home-reno');
+    window.scrollTo({ top: 400, behavior: 'smooth' });
   };
 
   return (
@@ -94,78 +161,65 @@ export default function App() {
         savedCount={savedEstimates.length}
         onOpenSavedDrawer={() => setIsSavedDrawerOpen(true)}
         onRequestBids={() => setLeadModal({ isOpen: true, mode: 'bids' })}
+        onOpenAuthModal={() => {
+          setAuthModalInitialRole('homeowner');
+          setIsAuthModalOpen(true);
+        }}
       />
 
       {/* Main Dynamic Viewport */}
       <main className="flex-1">
-        {/* Hero is shown on home-reno and all-calculators */}
-        {(activeView === 'home-reno' || activeView === 'all-calculators') && (
+        {/* Real Estate & Construction Hero Section */}
+        {activeView === 'home-reno' && (
           <HeroSection
-            onSelectCategory={handleCategorySelect}
-            onOpenHomeReno={() => {
-              setRealEstateTool('shell-to-slab');
-              setActiveView('home-reno');
-              window.scrollTo({ top: 450, behavior: 'smooth' });
-            }}
-            onSelectRealEstateTool={(tool) => {
-              setRealEstateTool(tool);
-              setActiveView('home-reno');
-              window.scrollTo({ top: 450, behavior: 'smooth' });
-            }}
+            onSelectRealEstateTool={handleSelectRealEstateTool}
+            onExploreContractors={() => setActiveView('contractors')}
           />
         )}
 
         {/* View 1: Priority Real Estate & Home Finishing Suite */}
         {activeView === 'home-reno' && (
-          <>
-            <RealEstateHomeSuite
-              key={realEstateTool}
-              initialTool={realEstateTool}
-              onSaveEstimate={handleSaveEstimate}
-              onRequestBids={(res) => setLeadModal({ isOpen: true, mode: 'bids', result: res })}
-              onOpenReportModal={(res) => setLeadModal({ isOpen: true, mode: 'report', result: res })}
-            />
-            {/* Exploration of the other categories */}
-            <CategoryGrid
-              onSelectCategory={handleCategorySelect}
-              onOpenHomeReno={() => {
-                setRealEstateTool('shell-to-slab');
-                setActiveView('home-reno');
-                window.scrollTo({ top: 400, behavior: 'smooth' });
-              }}
-            />
-          </>
+          <RealEstateHomeSuite
+            key={realEstateTool}
+            initialTool={realEstateTool}
+            onSaveEstimate={handleSaveEstimate}
+            onRequestBids={(res) => setLeadModal({ isOpen: true, mode: 'bids', result: res })}
+            onOpenReportModal={(res) => setLeadModal({ isOpen: true, mode: 'report', result: res })}
+          />
         )}
 
-        {/* View 2: All 10 Categories Showcase */}
-        {activeView === 'all-calculators' && (
-          <CategoryGrid
-            onSelectCategory={handleCategorySelect}
-            onOpenHomeReno={() => {
-              setActiveView('home-reno');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+        {/* View 2: Complete Verified Contractor Directory */}
+        {activeView === 'contractors' && (
+          <ContractorDirectoryView
+            onRequestQuote={(contractor) => {
+              setLeadModal({
+                isOpen: true,
+                mode: 'direct_hire',
+                selectedContractor: contractor,
+              });
+            }}
+            onOpenContractorRegister={() => {
+              setAuthModalInitialRole('contractor');
+              setIsAuthModalOpen(true);
             }}
           />
         )}
 
-        {/* View 3: Specialized Calculators (Degree, Debt, DIY Regret, Car) */}
-        {activeView === 'other-calc' && (
-          <OtherCalculators
-            initialAppId={activeSubCalcId}
-            onSwitchToHomeReno={() => {
-              setActiveView('home-reno');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-          />
+        {/* View 3: Construction Marketplace (Materials, Tools & Equipment) */}
+        {activeView === 'materials' && (
+          <ConstructionMarketplaceView />
         )}
 
         {/* View 4: SEO Authority & Guides Library */}
         {activeView === 'seo-articles' && (
           <SeoArticlesView
-            onOpenCalculator={(calcId) => {
-              handleCategorySelect(calcId);
-            }}
+            onOpenCalculator={handleArticleCalculatorRequest}
           />
+        )}
+
+        {/* View 5: Platform Owner Monetization, Contractors & Users Hub */}
+        {activeView === 'admin' && (
+          <AdminMonetizationDashboard />
         )}
       </main>
 
@@ -175,15 +229,30 @@ export default function App() {
           setActiveView(v);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
-        onSelectCategory={handleCategorySelect}
+        onSelectTool={handleSelectRealEstateTool}
       />
 
-      {/* Lead Capture & PDF Modal */}
+      {/* Auth Modal with Contractor & Homeowner options */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialRole={authModalInitialRole}
+        initialMode={authModalInitialRole === 'contractor' ? 'signup' : 'login'}
+      />
+
+      {/* Lead Capture, Bids & Direct Hire Modal */}
       <LeadCaptureModal
         isOpen={leadModal.isOpen}
-        onClose={() => setLeadModal({ ...leadModal, isOpen: false })}
+        onClose={() =>
+          setLeadModal({
+            ...leadModal,
+            isOpen: false,
+            selectedContractor: undefined,
+          })
+        }
         mode={leadModal.mode}
         result={leadModal.result}
+        selectedContractor={leadModal.selectedContractor}
       />
 
       {/* Saved Estimates Drawer */}
@@ -193,7 +262,19 @@ export default function App() {
         savedEstimates={savedEstimates}
         onDeleteEstimate={handleDeleteEstimate}
         onLoadEstimate={handleLoadEstimate}
+        onOpenAuthModal={() => {
+          setAuthModalInitialRole('homeowner');
+          setIsAuthModalOpen(true);
+        }}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }

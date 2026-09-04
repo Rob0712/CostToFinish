@@ -20,12 +20,14 @@ import {
   TrendingUp,
   AlertCircle,
   HelpCircle,
-  FileText
+  FileText,
+  Compass
 } from 'lucide-react';
 import {
   HomeRenoInputs,
   HomeRenoResult,
-  QualityTier
+  QualityTier,
+  BlueprintSchedule
 } from '../types';
 import {
   BASE_FINISHING_COST_PER_SQFT,
@@ -39,6 +41,7 @@ import {
   formatCurrency,
   formatNumber
 } from '../utils/calculationUtils';
+import { BlueprintTakeoffPanel } from './BlueprintTakeoffPanel';
 
 interface Props {
   onSaveEstimate: (result: HomeRenoResult, title: string) => void;
@@ -259,40 +262,61 @@ export const HomeRenoCalculator: React.FC<Props> = ({
                       </label>
                       <div className="inline-flex rounded-lg bg-slate-200 p-0.5 text-xs font-bold">
                         <button
-                          onClick={() => setInputs({ ...inputs, unit: 'sqft' })}
-                          className={`px-2.5 py-1 rounded-md font-black ${
-                            inputs.unit === 'sqft' ? 'bg-white text-slate-950 shadow-xs' : 'text-slate-600'
+                          type="button"
+                          onClick={() => {
+                            if (inputs.unit !== 'sqft') {
+                              // convert from sqm to sqft
+                              const converted = Math.round(inputs.squareFootage * 10.7639);
+                              setInputs({ ...inputs, unit: 'sqft', squareFootage: converted });
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-md font-black transition ${
+                            inputs.unit === 'sqft' ? 'bg-white text-slate-950 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
-                          Sq. Ft.
+                          Sq. Ft. (ft²)
                         </button>
                         <button
-                          onClick={() => setInputs({ ...inputs, unit: 'sqm' })}
-                          className={`px-2.5 py-1 rounded-md font-black ${
-                            inputs.unit === 'sqm' ? 'bg-white text-slate-950 shadow-xs' : 'text-slate-600'
+                          type="button"
+                          onClick={() => {
+                            if (inputs.unit !== 'sqm') {
+                              // convert from sqft to sqm
+                              const converted = Math.round(inputs.squareFootage / 10.7639);
+                              setInputs({ ...inputs, unit: 'sqm', squareFootage: converted });
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-md font-black transition ${
+                            inputs.unit === 'sqm' ? 'bg-white text-slate-950 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
-                          Sq. Meters
+                          Sq. Meters (m²)
                         </button>
                       </div>
                     </div>
                     <div className="relative">
                       <input
                         type="number"
-                        min="200"
-                        max="25000"
-                        step="50"
+                        min={inputs.unit === 'sqm' ? 20 : 200}
+                        max={inputs.unit === 'sqm' ? 2500 : 25000}
+                        step={inputs.unit === 'sqm' ? 5 : 50}
                         value={inputs.squareFootage}
-                        onChange={(e) => setInputs({ ...inputs, squareFootage: Math.max(50, Number(e.target.value)) })}
+                        onChange={(e) => setInputs({ ...inputs, squareFootage: Math.max(inputs.unit === 'sqm' ? 10 : 50, Number(e.target.value)) })}
                         className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl text-xl font-black text-slate-950 focus:outline-blue-600"
                       />
                       <span className="absolute right-4 top-3.5 text-sm font-black text-slate-400 uppercase">
-                        {inputs.unit === 'sqft' ? 'sq ft' : 'sq m'}
+                        {inputs.unit === 'sqft' ? 'sq ft' : 'sq m (m²)'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 font-medium mt-1.5">
-                      Average US single-family home is ~1,800–2,400 sq. ft. Basements ~800–1,200 sq. ft.
-                    </p>
+                    <div className="flex items-center justify-between text-xs text-slate-500 font-medium mt-1.5">
+                      <span>
+                        {inputs.unit === 'sqm'
+                          ? `≈ ${Math.round(inputs.squareFootage * 10.7639).toLocaleString()} sq. ft.`
+                          : `≈ ${Math.round((inputs.squareFootage / 10.7639) * 10) / 10} m² (sq. meters)`}
+                      </span>
+                      <span className="text-slate-400">
+                        {inputs.unit === 'sqm' ? 'Standard home: ~160–250 m²' : 'Standard home: ~1,800–2,400 sq.ft.'}
+                      </span>
+                    </div>
                   </div>
 
                   <div>
@@ -335,6 +359,14 @@ export const HomeRenoCalculator: React.FC<Props> = ({
                     <span>Base Finish Rate: <strong className="text-slate-950 font-black">${BASE_FINISHING_COST_PER_SQFT}/sq.ft.</strong></span>
                   </div>
                 </div>
+
+                {/* Blueprint / Architectural Drawing Takeoff Panel */}
+                <BlueprintTakeoffPanel
+                  blueprint={inputs.blueprint}
+                  unit={inputs.unit}
+                  onChange={(bp) => setInputs((prev) => ({ ...prev, blueprint: bp }))}
+                  onApplyDetectedSqFt={(area) => setInputs((prev) => ({ ...prev, squareFootage: area }))}
+                />
 
                 {/* Next Step CTA */}
                 <div className="pt-4 flex justify-end">
@@ -710,7 +742,11 @@ export const HomeRenoCalculator: React.FC<Props> = ({
                         {formatCurrency(result.costToFinishContractor)}
                       </h2>
                       <p className="text-xs sm:text-sm text-slate-400 font-medium mt-1">
-                        Turn-Key Licensed General Contractor Estimate ({result.effectiveSqFt} sq. ft. @ {result.remainingPercentage}% remaining)
+                        Turn-Key Licensed General Contractor Estimate (
+                        {result.inputUnit === 'sqm'
+                          ? `${result.rawInputArea.toLocaleString()} m² / ${result.effectiveSqFt.toLocaleString()} sq.ft.`
+                          : `${result.effectiveSqFt.toLocaleString()} sq.ft. / ${result.effectiveSqM.toLocaleString()} m²`}
+                        {' '}@ {result.remainingPercentage}% remaining)
                       </p>
                     </div>
 
@@ -782,6 +818,28 @@ export const HomeRenoCalculator: React.FC<Props> = ({
                       </div>
                     </div>
                   )}
+
+                  {/* Blueprint Architectural Plan Schedule Badge if specified */}
+                  {inputs.blueprint && result.blueprintSummary && (
+                    <div className="mt-6 pt-6 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+                          <Compass className="w-4 h-4 stroke-[2.5]" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-black text-white">
+                            Architectural Plan Takeoff: {inputs.blueprint.planName || 'Custom Blueprint'} ({inputs.blueprint.planNumber || 'Ref Sheet A-1'})
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">
+                            {result.blueprintSummary.totalBaths} Baths ({inputs.blueprint.fullBathsCount} Full, {inputs.blueprint.halfBathsCount} Half) • {result.blueprintSummary.cabinetLinearFeetTotal} LF Total Millwork • {result.blueprintSummary.countertopSqFtEstimate} sq.ft. Slab • {result.blueprintSummary.ceilingHeightNote}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black uppercase px-2 py-1 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                        Underwriter & Bank Ready
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Phase-by-Phase Line Item Table */}
@@ -842,6 +900,26 @@ export const HomeRenoCalculator: React.FC<Props> = ({
                             </td>
                           </tr>
                         ))}
+                        {/* Blueprint Additions row */}
+                        {Boolean(result.blueprintAdditionsTotal && result.blueprintAdditionsTotal > 0) && (
+                          <tr className="bg-blue-50/70 font-bold text-slate-900 border-t border-blue-200">
+                            <td className="py-3.5 px-4 font-black" colSpan={4}>
+                              <div className="text-blue-950 flex items-center gap-1.5">
+                                <Compass className="w-4 h-4 text-blue-700" />
+                                <span>Architectural Blueprint Schedule Adjustments</span>
+                              </div>
+                              <div className="text-xs text-blue-700 font-medium mt-0.5">
+                                Additional bath suites, kitchen island millwork, pantry & walk-in closet finish packages
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-xs text-blue-800 font-bold">
+                              Blueprint Takeoff
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-black text-base text-blue-950">
+                              +{formatCurrency(result.blueprintAdditionsTotal || 0)}
+                            </td>
+                          </tr>
+                        )}
                         {/* Hidden costs row */}
                         <tr className="bg-slate-50/80 font-bold text-slate-900">
                           <td className="py-3.5 px-4 font-black" colSpan={4}>
@@ -867,7 +945,11 @@ export const HomeRenoCalculator: React.FC<Props> = ({
                         Estimated Takeoff & Trade Shopping List
                       </h3>
                       <p className="text-xs text-slate-600 font-medium">
-                        Approximate quantities based on {result.effectiveSqFt} sq. ft. scope and selected quality tier.
+                        Approximate quantities based on{' '}
+                        {result.inputUnit === 'sqm'
+                          ? `${result.rawInputArea.toLocaleString()} m² (${result.effectiveSqFt.toLocaleString()} sq. ft.)`
+                          : `${result.effectiveSqFt.toLocaleString()} sq. ft. (${result.effectiveSqM.toLocaleString()} m²)`}{' '}
+                        scope and selected quality tier.
                       </p>
                     </div>
                   </div>

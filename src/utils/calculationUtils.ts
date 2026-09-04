@@ -7,7 +7,10 @@ import {
 } from '../data/homeRenoData';
 
 export function calculateHomeReno(inputs: HomeRenoInputs): HomeRenoResult {
-  const sqft = inputs.unit === 'sqm' ? Math.round(inputs.squareFootage * 10.7639) : inputs.squareFootage;
+  const isMetric = inputs.unit === 'sqm';
+  const rawInputArea = inputs.squareFootage;
+  const sqft = isMetric ? Math.round(inputs.squareFootage * 10.7639) : inputs.squareFootage;
+  const sqM = isMetric ? inputs.squareFootage : Math.round((inputs.squareFootage / 10.7639) * 10) / 10;
 
   // Quality multiplier
   const qualityMultipliers: Record<string, number> = {
@@ -21,8 +24,22 @@ export function calculateHomeReno(inputs: HomeRenoInputs): HomeRenoResult {
   const locationObj = LOCATION_MULTIPLIERS.find((l) => l.id === inputs.locationId);
   const locationMultiplier = inputs.customLocationMultiplier || locationObj?.multiplier || 1.0;
 
+  // Ceiling height multiplier on baseline volume (9ft = +4%, 10ft = +8%, 12ft = +15% due to 54" drywall and scaffolding)
+  let ceilingVolumeMultiplier = 1.0;
+  if (inputs.blueprint) {
+    if (inputs.blueprint.ceilingHeightFeet >= 12) {
+      ceilingVolumeMultiplier = 1.15;
+    } else if (inputs.blueprint.ceilingHeightFeet >= 10) {
+      ceilingVolumeMultiplier = 1.08;
+    } else if (inputs.blueprint.ceilingHeightFeet >= 9) {
+      ceilingVolumeMultiplier = 1.04;
+    }
+  }
+
   // Total complete finishing baseline for entire area
-  const totalScopeCost = Math.round(sqft * BASE_FINISHING_COST_PER_SQFT * qualityMultiplier * locationMultiplier);
+  const totalScopeCost = Math.round(
+    sqft * BASE_FINISHING_COST_PER_SQFT * qualityMultiplier * locationMultiplier * ceilingVolumeMultiplier
+  );
 
   // Sum weights of remaining phases
   let remainingWeightSum = 0;
@@ -61,23 +78,62 @@ export function calculateHomeReno(inputs: HomeRenoInputs): HomeRenoResult {
   });
   hiddenCostsTotal = Math.round(hiddenCostsTotal);
 
+  // Specific Blueprint Plan Additions:
+  // If user provided detailed blueprint counts for baths and cabinet linear feet:
+  let blueprintAdditions = 0;
+  let totalBaths = 0;
+  let totalCabinetLinearFeet = 0;
+  let estimatedCountertopSqFt = 0;
+  let ceilingNote = 'Standard 8-ft ceiling';
+
+  if (inputs.blueprint) {
+    const bp = inputs.blueprint;
+    totalBaths = bp.fullBathsCount + (bp.halfBathsCount * 0.5);
+    totalCabinetLinearFeet = bp.kitchenLinearFeet + bp.vanityLinearFeet + (bp.kitchenIsland ? 8 : 0);
+    estimatedCountertopSqFt = Math.round(totalCabinetLinearFeet * 2.2);
+
+    if (bp.ceilingHeightFeet > 8) {
+      ceilingNote = `${bp.ceilingHeightFeet}-ft High Ceilings (Included 54" Rock + Scaffolding)`;
+    }
+
+    // Baseline calculation covers 2 baths per 1,800 sq ft.
+    // Additional baths beyond baseline require rough-in fixture lines & tile suites:
+    const baselineExpectedBaths = Math.max(1.5, Math.round((sqft / 1000) * 10) / 10);
+    const extraBaths = Math.max(0, totalBaths - baselineExpectedBaths);
+    if (extraBaths > 0 && !inputs.phases['bathrooms']) {
+      // Extra bath full finish cost: ~$6,500 budget, $10,500 standard, $18,000 luxury
+      const costPerExtraBath = Math.round(10500 * qualityMultiplier * locationMultiplier);
+      blueprintAdditions += Math.round(extraBaths * costPerExtraBath);
+    }
+
+    // Custom Walk-in Pantry & Master Walk-In Millwork
+    if (bp.hasWalkInPantry && !inputs.phases['finish_carpentry']) {
+      blueprintAdditions += Math.round(1800 * qualityMultiplier * locationMultiplier);
+    }
+    if (bp.hasMasterWalkInCloset && !inputs.phases['finish_carpentry']) {
+      blueprintAdditions += Math.round(2600 * qualityMultiplier * locationMultiplier);
+    }
+  }
+
   // General Contractor Markup (20% management, liability insurance, trade coordination, building code warranties)
-  const contractorManagementMarkup = Math.round(costToFinishBase * 0.20);
-  const costToFinishContractor = costToFinishBase + hiddenCostsTotal + contractorManagementMarkup;
+  const contractorManagementMarkup = Math.round((costToFinishBase + blueprintAdditions) * 0.20);
+  const costToFinishContractor = costToFinishBase + blueprintAdditions + hiddenCostsTotal + contractorManagementMarkup;
 
   // DIY Self-Managed Option:
   // User saves ~65% of labor on non-licensed trades (painting, trim, flooring, hanging drywall)
-  // But still pays for materials and specialty sub-trades (plumbing/electrical rough-in connections)
-  // Overall savings typically ~22% - 30% compared to full contractor turn-key
-  const costToFinishDIY = Math.round((costToFinishBase * 0.72) + hiddenCostsTotal);
+  const costToFinishDIY = Math.round(((costToFinishBase + blueprintAdditions) * 0.72) + hiddenCostsTotal);
   const diySavings = Math.max(0, costToFinishContractor - costToFinishDIY);
 
   // Estimated calendar working days to finish
-  // Rough baseline: 1 crew day per 25 sq ft of remaining tasks
   const rawWorkDays = Math.round((sqft * remainingWeightSum) / 22);
   const estimatedDaysToFinish = Math.max(14, Math.min(180, rawWorkDays));
 
-  // Takeoff / Shopping List estimates
+  // Takeoff / Shopping List estimates tailored to Blueprint specifications:
+  const kitchenCabinetRun = inputs.blueprint ? inputs.blueprint.kitchenLinearFeet : Math.round(sqft / 90);
+  const bathCountText = inputs.blueprint
+    ? `${inputs.blueprint.fullBathsCount} Full, ${inputs.blueprint.halfBathsCount} Half`
+    : (inputs.storeys > 1 ? '2.5 Bathrooms' : '2 Bathrooms');
+
   const takeoffShoppingList = [
     {
       category: 'Surfaces & Paint',
@@ -104,16 +160,25 @@ export function calculateHomeReno(inputs: HomeRenoInputs): HomeRenoResult {
       estimatedCost: Math.round(sqft * 2.8),
     },
     {
-      category: 'Cabinetry & Fixtures',
-      item: 'Soft-Close Cabinets, Countertops & Vanity Sets',
-      estimatedQuantity: `${inputs.storeys > 1 ? 'Kitchen + 2-3 Baths' : 'Kitchen + 1-2 Baths'}`,
-      estimatedCost: Math.round(sqft * (inputs.qualityTier === 'luxury' ? 18 : 11)),
+      category: 'Cabinetry & Countertops',
+      item: `${kitchenCabinetRun} Linear Ft Base/Wall Cabinets + Quartz Slabs`,
+      estimatedQuantity: `${kitchenCabinetRun} Linear Ft Kitchen + Vanities (${bathCountText})`,
+      estimatedCost: Math.round(sqft * (inputs.qualityTier === 'luxury' ? 18 : 11) + (inputs.blueprint?.kitchenIsland ? 2800 : 0)),
+    },
+    {
+      category: 'Toilet & Bathroom Suites',
+      item: `Full Bath Enclosures, Schluter Shower Pans & Fixture Kits`,
+      estimatedQuantity: `${bathCountText} Complete Suites`,
+      estimatedCost: Math.round((inputs.blueprint ? totalBaths : 2) * (inputs.qualityTier === 'luxury' ? 8500 : 5200)),
     },
   ];
 
   return {
     baseFinishingCost: BASE_FINISHING_COST_PER_SQFT,
     effectiveSqFt: sqft,
+    inputUnit: inputs.unit,
+    rawInputArea,
+    effectiveSqM: sqM,
     qualityMultiplier,
     locationMultiplier,
     totalScopeCost,
@@ -125,8 +190,17 @@ export function calculateHomeReno(inputs: HomeRenoInputs): HomeRenoResult {
     costToFinishDIY,
     diySavings,
     estimatedDaysToFinish,
+    blueprintAdditionsTotal: blueprintAdditions,
     phaseBreakdown,
     takeoffShoppingList,
+    blueprintSummary: inputs.blueprint
+      ? {
+          totalBaths,
+          cabinetLinearFeetTotal: totalCabinetLinearFeet,
+          countertopSqFtEstimate: estimatedCountertopSqFt,
+          ceilingHeightNote: ceilingNote,
+        }
+      : undefined,
   };
 }
 
